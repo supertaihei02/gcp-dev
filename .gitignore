@@ -1,0 +1,11 @@
+!**/.gitkeep
+
+## gae-go
+gae-go/gcloud
+gae-go/**/vendor
+gae-go/**/pkg
+
+
+
+
+
