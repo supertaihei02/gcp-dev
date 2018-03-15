@@ -1,0 +1,30 @@
+runtime: go
+api_version: go1.8
+
+handlers:
+- url: /assets
+  static_dir: www/assets
+
+- url: /.*
+  script: _go_app
+  secure: optional
+
+automatic_scaling:
+  max_concurrent_requests: 40
+  min_idle_instances: 0
+  max_idle_instances: 1
+
+nobuild_files:
+- vendor
+
+skip_files:
+  - \.gitignore
+  - \.DS_StoreY
+  - \.envrc
+  - README.md
+  - ^.*\.yaml
+  - \.git/.*
+  - ^\.idea/.*
+  - ^.*\.iml
+  - vendor
+  - test
