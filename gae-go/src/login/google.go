@@ -51,7 +51,7 @@ func NewGoogle(w http.ResponseWriter, r *http.Request) *Google {
 func (this *Google) Login() {
 	sess := NewSession(this.w, this.r)
 	log.Printf("sess ID %s", sess.session.ID)
-	// Set state token For CSRF attack check
+	// TODO Set state token For CSRF attack check
 	url := this.config.AuthCodeURL(sess.session.ID, oauth2.ApprovalForce, oauth2.AccessTypeOnline)
 	if url == "" {
 		// err
@@ -62,9 +62,9 @@ func (this *Google) Login() {
 
 func (this *Google) Callback(redirect string) {
 	ctx := appengine.NewContext(this.r)
-
-	log.Printf("request %#v", this.r)
 	code := this.r.FormValue("code")
+
+	// TODO state check
 	state := this.r.FormValue("state")
 	log.Printf("code:%s state:%s", code, state)
 
