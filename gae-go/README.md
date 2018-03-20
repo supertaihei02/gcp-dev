@@ -2,7 +2,8 @@
 
 ## Why
 
-GAEにはStandardとFlexibleがある。
+[GAE](https://cloud.google.com/appengine/docs/?hl=ja)にはStandardとFlexibleがある。
+
 
 ### Language
 
@@ -30,6 +31,15 @@ https://github.com/mercari/docker-appengine-go
 * GAE standard Go1.8で使いたい。
 
 これらを満たすサンプルがなかったのでコツコツ作った。
+
+|Sample|Information|
+|---|---|
+|**hello**|画面にただhello worldを表示するだけのサンプル|
+|**template**|デフォルトのテンプレートエンジンを使ってページを表示するサンプル|
+|**login**|ログイン機能を持たせたサンプル|
+
+
+
 
 
 ## Init
@@ -110,6 +120,8 @@ $ docker-compose exec app gcloud config set account [Account]
 $ docker-compose exec app gcloud projects create [Project Name]
 # set exist project
 $ docker-compose exec app gcloud config set project [Project ID]
-# view GAE log
+# tail GAE log
 $ docker-compose exec app gcloud app logs tail -s default
+# show projects
+$ docker-compose exec app gsutil ls
 ```

@@ -1,0 +1,42 @@
+runtime: go
+api_version: go1.8
+
+handlers:
+- url: /.*
+  script: _go_app
+  secure: optional
+
+automatic_scaling:
+  max_concurrent_requests: 40
+  min_idle_instances: 0
+  max_idle_instances: 1
+
+env_variables:
+# Google Login
+# 1.People APIを有効化する https://console.developers.google.com/apis/api/people.googleapis.com/overview
+# 2.認証情報を取得する https://console.developers.google.com/
+#   プロジェクト > 認証情報 > 認証情報を作成 > OauthクライアントID > 同意画面を作成
+#     > ウェブアプリケーション > 名前:例：GoogleLogin
+#       > 承認済みのJavascript生成元（http://localhost:8080、http://[YOUR_PROJECT_ID].appspot.com）
+#       > 承認済みのリダイレクトURL（http://localhost:8080/login/google/callback、http://[YOUR_PROJECT_ID].appspot.com/login/google/callback）
+  GOOGLE_CLIENT_ID: 'YOUR CLIENT ID'
+  GOOGLE_CLIENT_SECRET: 'YOUR CLIENT SECRET'
+  GOOGLE_REDIRECT_URL: 'YOUR REDIRECT URL'
+
+
+nobuild_files:
+  - vendor
+
+skip_files:
+  - \.gitignore
+  - \.DS_StoreY
+  - \.envrc
+  - README.md
+  - ^.*\.yaml
+  - \.git/.*
+  - ^\.idea/.*
+  - ^.*\.iml
+  - Gopkg.*
+  - vendor
+  - test
+  - controllers # conflicts with same file imported from GOPATH

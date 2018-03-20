@@ -15,4 +15,4 @@ services:
     working_dir: /go/src/${BUILD_TARGET}
     command: dep init
     volumes:
-      - .:/go
+      - ./src/${BUILD_TARGET}:/go/src/${BUILD_TARGET}
