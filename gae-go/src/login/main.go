@@ -6,11 +6,10 @@ import (
 	"log"
 	"net/http"
 	"github.com/gorilla/mux"
+	"strconv"
 )
 
 const (
-	SessionName = "session-name"
-	ContextSessionKey = "gcp-go"
 )
 
 type TemplateData struct {
@@ -20,6 +19,7 @@ type TemplateData struct {
 }
 
 var (
+	sessionConfig = SessionConfig{}
 	templateData = TemplateData{"site name", "site body", map[string]interface{}{
 		"enableGoogle": false,
 		"enableFacebook": false,
@@ -50,7 +50,7 @@ func memberDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 	if id == "me" {
 		// self
-		sess := NewSession(w, r)
+		sess := NewSession(w, r, &sessionConfig)
 		if sess == nil {
 			panic("error session get")
 		}
@@ -74,6 +74,16 @@ func execute(w http.ResponseWriter, t *template.Template, n string, d interface{
 }
 
 func init() {
+	sessionConfig = SessionConfig{
+		Name: os.Getenv("SESSION_NAME"),
+		CookieSecret: os.Getenv("SESSION_COOKIE_SECRET"),
+		Domain: os.Getenv("SESSION_DOMAIN"),
+		Path: os.Getenv("SESSION_PATH"),
+	}
+	sessionConfig.MaxAge, _ = strconv.Atoi(os.Getenv("SESSION_MAXAGE"))
+	sessionConfig.Secure, _ = strconv.ParseBool(os.Getenv("SESSION_SECURE"))
+	sessionConfig.HttpOnly, _ = strconv.ParseBool(os.Getenv("SESSION_HTTPONLY"))
+
 	router := mux.NewRouter()
 	router.HandleFunc("/", indexHandler).Methods(http.MethodGet)
 
@@ -111,10 +121,52 @@ func init() {
 		}).Methods(http.MethodGet)
 	}
 
+	// Twitter Oauth
+	if os.Getenv("TWITTER_CONSUMER_KEY") != "" &&
+		os.Getenv("TWITTER_CONSUMER_SECRET") != "" {
+		templateData.Options["enableTwitter"] = true
+		loginRouter.HandleFunc("/twitter", func(w http.ResponseWriter, r *http.Request) {
+			tw := NewTwitter(w, r)
+			tw.Login()
+		}).Methods(http.MethodGet)
+
+		loginRouter.HandleFunc("/twitter/callback", func(w http.ResponseWriter, r *http.Request) {
+			tw := NewTwitter(w, r)
+			tw.Callback("/member/me/")
+		}).Methods(http.MethodGet)
+
+		loginRouter.HandleFunc("/twitter/me", func(w http.ResponseWriter, r *http.Request) {
+			tw := NewTwitter(w, r)
+			_, err := tw.getMe()
+			if err != nil {
+				http.Redirect(w, r, "/login/twitter", http.StatusFound)
+			}
+		}).Methods(http.MethodGet)
+	}
 
 	// Facebook Oauth
-
 	// Twitter Oauth
+	if os.Getenv("FACEBOOK_APP_ID") != "" &&
+		os.Getenv("FACEBOOK_APP_SECRET") != "" {
+		templateData.Options["enableFacebook"] = true
+		loginRouter.HandleFunc("/facebook", func(w http.ResponseWriter, r *http.Request) {
+			fb := NewFacebook(w, r)
+			fb.Login()
+		}).Methods(http.MethodGet)
+
+		loginRouter.HandleFunc("/facebook/callback", func(w http.ResponseWriter, r *http.Request) {
+			fb := NewFacebook(w, r)
+			fb.Callback("/member/me/")
+		}).Methods(http.MethodGet)
+
+		loginRouter.HandleFunc("/facebook/me", func(w http.ResponseWriter, r *http.Request) {
+			fb := NewFacebook(w, r)
+			_, err := fb.getMe()
+			if err != nil {
+				http.Redirect(w, r, "/login/facebook", http.StatusFound)
+			}
+		}).Methods(http.MethodGet)
+	}
 
 	//router.NotFoundHandler = http.HandlerFunc(indexHandler)
 

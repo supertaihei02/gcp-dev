@@ -12,6 +12,9 @@ automatic_scaling:
   max_idle_instances: 1
 
 includes:
+  # TODO
+  # cp ./secret.sample.yaml ./secret.yaml
+  # and modify your access keys
   - secret.yaml
 
 nobuild_files:
@@ -29,4 +32,3 @@ skip_files:
   - Gopkg.*
   - vendor
   - test
-  - controllers # conflicts with same file imported from GOPATH

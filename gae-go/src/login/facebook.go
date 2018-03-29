@@ -12,52 +12,60 @@ import (
 
 	"golang.org/x/oauth2"
 	"google.golang.org/appengine"
-	GoogleOauth "google.golang.org/api/oauth2/v2"
-	GooglePeople "google.golang.org/api/people/v1"
+	"encoding/json"
+	"net/url"
 )
 
 const(
-	GoogleAccessTokenKey = "GoogleAccessToken"
-	GoogleOauthState = "GoogleOauthState"
+	FacebookAccessTokenKey = "FacebookAccessToken"
+	FacebookOauthState = "FacebookOauthState"
+	FacebookApiEndpoint = "https://graph.facebook.com/v2.12/"
 )
 
 var(
-	GoogleConfig = struct {
+	FacebookConfig = struct {
 		ClientID string
 		ClientSecret string
 		RedirectURL string
 		Endpoint oauth2.Endpoint
 	}{
-		ClientID: os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL: os.Getenv("GOOGLE_REDIRECT_URL"),
+		ClientID: os.Getenv("FACEBOOK_APP_ID"),
+		ClientSecret: os.Getenv("FACEBOOK_APP_SECRET"),
+		RedirectURL: os.Getenv("FACEBOOK_REDIRECT_URL"),
 		Endpoint: oauth2.Endpoint{
-			"https://accounts.google.com/o/oauth2/v2/auth",
-			"https://www.googleapis.com/oauth2/v4/token",
+			"https://www.facebook.com/dialog/oauth",
+			"https://graph.facebook.com/oauth/access_token",
 		},
 	}
 )
 
-type Google struct {
+type Facebook struct {
 	w	http.ResponseWriter
 	r *http.Request
 	config *oauth2.Config
+	tok *oauth2.Token
 	client *http.Client
 }
 
-func NewGoogle(w http.ResponseWriter, r *http.Request) *Google {
+func NewFacebook(w http.ResponseWriter, r *http.Request) *Facebook {
 	config := &oauth2.Config{
-		ClientID:    	GoogleConfig.ClientID,
-		ClientSecret: GoogleConfig.ClientSecret,
-		RedirectURL:  GoogleConfig.RedirectURL,
-		Scopes:       []string{GoogleOauth.UserinfoEmailScope, GoogleOauth.UserinfoProfileScope},
-		Endpoint:     GoogleConfig.Endpoint,
+		ClientID:    	FacebookConfig.ClientID,
+		ClientSecret: FacebookConfig.ClientSecret,
+		RedirectURL:  FacebookConfig.RedirectURL,
+		Scopes:       []string{"email", "user_about_me", "user_birthday"},
+		Endpoint:     FacebookConfig.Endpoint,
 	}
-	return &Google{w, r, config, nil}
+
+	fb := &Facebook{w, r, config, nil, nil}
+	/*
+	// TODO create token form session
+	sess := NewSession(w, r, &sessionConfig)
+	*/
+	return fb
 }
 
 
-func (this *Google) Login() {
+func (this *Facebook) Login() {
 	sess := NewSession(this.w, this.r, &sessionConfig)
 	log.Printf("sess ID %s", sess.session.ID)
 	// CSRF attack check state
@@ -67,7 +75,7 @@ func (this *Google) Login() {
 		panic(err)
 	}
 	state := strings.TrimRight(base32.StdEncoding.EncodeToString(b), "=")
-	sess.Set(GoogleOauthState, state)
+	sess.Set(FacebookOauthState, state)
 	sess.Save()
 	log.Printf("before state:%s", state)
 
@@ -79,7 +87,7 @@ func (this *Google) Login() {
 	http.Redirect(this.w, this.r, url, http.StatusFound)
 }
 
-func (this *Google) Callback(redirect string) {
+func (this *Facebook) Callback(redirect string) {
 	sess := NewSession(this.w, this.r, &sessionConfig)
 
 	code := this.r.FormValue("code")
@@ -87,8 +95,8 @@ func (this *Google) Callback(redirect string) {
 	log.Printf("code:%s state:%s", code, state)
 
 	// CSRF attack check
-	if sess.Get(GoogleOauthState) != state {
-		log.Printf("invaild state sess:%s resp:%s", sess.Get(GoogleOauthState), state)
+	if sess.Get(FacebookOauthState) != state {
+		log.Printf("invaild state sess:%s resp:%s", sess.Get(FacebookOauthState), state)
 		panic(errors.New("invaild state"))
 	}
 
@@ -101,50 +109,68 @@ func (this *Google) Callback(redirect string) {
 		log.Printf("invaild token:%#v", tok)
 		panic(errors.New("invaild token"))
 	}
-	sess.Set(GoogleAccessTokenKey, tok.AccessToken)
+	this.tok = tok
+	sess.Set(FacebookAccessTokenKey, tok.AccessToken)
 
-	this.client = this.config.Client(ctx, tok)
-	service, _ := GoogleOauth.New(this.client)
-	tokenInfo, _ := service.Tokeninfo().AccessToken(tok.AccessToken).Context(ctx).Do()
-	// if Decode idToken
-	// idToken := tok.Extra("id_token").(string)
-
-	// Google People API have to enable api
-	// https://console.developers.google.com/apis/api/people.googleapis.com/overview
-	p, err := this.getPeople()
+	fb, err := this.getMe()
 	if err != nil {
-		log.Printf("People Get me error:%#v", err)
+		log.Printf("Get me error:%#v", err)
 		panic(err)
 	}
-	sess.Set("id", tokenInfo.UserId)
-	sess.Set("email", tokenInfo.Email)
-	sess.Set("name", p.Names[0].DisplayName)
-	sess.Set("photo", p.Photos[0].Url)
-	/*
-	// Show paramaters
-	for _, name := range p.Names {
-		log.Printf("name: %#v", name)
+	if id, ok := fb["id"].(string); ok {
+		sess.Set("id", id)
 	}
-	for _, photo := range p.Photos {
-		log.Printf("photo: %#v", photo)
+	if email, ok := fb["email"].(string); ok {
+		sess.Set("email", email)
 	}
-	*/
+	if name, ok := fb["name"].(string); ok {
+		sess.Set("name", name)
+	}
+	if picture, ok := fb["picture"].(map[string]interface{}); ok {
+		if data, ok := picture["data"].(map[string]interface{}); ok {
+			if url, ok := data["url"].(string); ok {
+				sess.Set("picture", url)
+			}
+		}
+	}
 	sess.Save()
 	http.Redirect(this.w, this.r, redirect, http.StatusFound)
 }
 
-func (this *Google) getPeople() (*GooglePeople.Person, error) {
-	if this.client == nil {
+func (this *Facebook) getMe() (map[string]interface{}, error) {
+	if this.config == nil {
 		return nil, errors.New("client not set")
 	}
-	service, err := GooglePeople.New(this.client) // Service
+	if this.tok == nil {
+		return nil, errors.New("token not set")
+	}
+	ctx := appengine.NewContext(this.r)
+	this.client = this.config.Client(ctx, this.tok)
+
+	v := url.Values{}
+	v.Set("fields", "email,name,picture")
+
+	resp, err := this.client.Get(FacebookApiEndpoint+"me")
 	if err != nil {
+		log.Printf("Get me error:%#v", err)
+		panic(err)
+	}
+	defer resp.Body.Close()
+
+	log.Printf("Response:%s", resp.Body)
+
+	if resp.StatusCode >= 500 {
+		return nil, errors.New("Facebook is unavailable")
+	}
+
+	if resp.StatusCode >= 400 {
+		return nil, errors.New("Facebook request is invalid")
+	}
+
+	var result map[string]interface{}
+	if err = json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, err
 	}
-	people, err := service.People.Get("people/me").PersonFields("names,photos").Do()
-	if err != nil {
-		return nil, err
-	}
-	log.Printf("People me %#v", people)
-	return people, nil
+	log.Printf("Result %#v", result)
+	return result, nil
 }

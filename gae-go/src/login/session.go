@@ -1,10 +1,9 @@
 package login
 
 import (
-	"log"
 	"net/http"
+	"log"
 
-	"github.com/gorilla/context"
 	"github.com/gorilla/sessions"
 )
 
@@ -15,22 +14,40 @@ type Session struct {
 	session *sessions.Session
 }
 
-func NewSession(w http.ResponseWriter, r *http.Request) *Session {
-	store := sessions.NewCookieStore([]byte("something-very-secret"))
-	s, err := store.Get(r, SessionName)
-	if err != nil {
-		log.Printf("sess no data %s %#v", SessionName, err)
-		s, err = store.New(r, SessionName)
-	}
-	context.Set(r, ContextSessionKey, s)
-	log.Printf("sess start Name:%s SessionKey:%s ID:%s", SessionName, ContextSessionKey, s.ID)
-	return &Session{w, r, store, s}
+type SessionConfig struct {
+	Name string
+	CookieSecret string
+	Domain string
+	Path string
+	MaxAge int
+	Secure bool
+	HttpOnly bool
 }
 
-func (this *Session) Flush() {
-	if s := context.Get(this.r, ContextSessionKey).(*sessions.Session); s != nil {
-		this.session = s
+func NewSession(w http.ResponseWriter, r *http.Request, c *SessionConfig) *Session {
+	store := sessions.NewCookieStore([]byte(c.CookieSecret))
+	if c != nil {
+		store.Options = &sessions.Options{
+			Domain:     c.Domain,
+			Path:       c.Path,
+			MaxAge:     c.MaxAge,
+			Secure:     c.Secure,
+			HttpOnly:   c.HttpOnly,
+		}
 	}
+	s, err := store.Get(r, c.Name)
+	if err != nil {
+		log.Printf("sess no data %s %#v", c.Name, err)
+		s, err = store.New(r, c.Name)
+	}
+	sess := &Session{w, r, store, s}
+	log.Printf("sess create Name:%s SessionKey:%s ID:%s", c.Name, c.CookieSecret, s.ID)
+	return sess
+}
+
+// TODO
+func destroySession(w http.ResponseWriter, r *http.Request) {
+
 }
 
 func (this *Session) Set(k string, v string) {
@@ -41,7 +58,7 @@ func (this *Session) Get(k string) string {
 	if v := this.session.Values[k]; v != nil {
 		return v.(string)
 	}
-	return "no data"
+	return ""
 }
 
 func (this *Session) Save() {

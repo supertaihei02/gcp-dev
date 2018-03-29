@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  branch = "master"
+  name = "github.com/garyburd/go-oauth"
+  packages = ["oauth"]
+  revision = "bca2e7f09a178fd36b034107a00e2323bca6a82e"
+
+[[projects]]
   name = "github.com/golang/protobuf"
   packages = ["proto"]
   revision = "925541529c1fa6821df4e44ce2723319eb2be768"
@@ -46,7 +52,7 @@
 [[projects]]
   branch = "master"
   name = "google.golang.org/api"
-  packages = ["gensupport","googleapi","googleapi/internal/uritemplates","oauth2/v2"]
+  packages = ["gensupport","googleapi","googleapi/internal/uritemplates","oauth2/v2","people/v1"]
   revision = "00840100d732f946c263bfd7bc26b17890f47fe7"
 
 [[projects]]
@@ -58,6 +64,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2c258f06b783d312ebcfee69a1e96f325a6ab40d244f30e8c04f26669e38ce8e"
+  inputs-digest = "c042aa89eac1455b97a331f9acf6efa7c6e0a2297eec0026ed70a95c5ea489f8"
   solver-name = "gps-cdcl"
   solver-version = 1

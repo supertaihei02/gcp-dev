@@ -5,11 +5,20 @@ import (
 	"net/http"
 	"os"
 	"errors"
+	"io"
+	"strings"
+	"encoding/base32"
+	"crypto/rand"
 
 	"golang.org/x/oauth2"
 	"google.golang.org/appengine"
 	GoogleOauth "google.golang.org/api/oauth2/v2"
 	GooglePeople "google.golang.org/api/people/v1"
+)
+
+const(
+	GoogleAccessTokenKey = "GoogleAccessToken"
+	GoogleOauthState = "GoogleOauthState"
 )
 
 var(
@@ -49,10 +58,20 @@ func NewGoogle(w http.ResponseWriter, r *http.Request) *Google {
 
 
 func (this *Google) Login() {
-	sess := NewSession(this.w, this.r)
+	sess := NewSession(this.w, this.r, &sessionConfig)
 	log.Printf("sess ID %s", sess.session.ID)
-	// TODO Set state token For CSRF attack check
-	url := this.config.AuthCodeURL(sess.session.ID, oauth2.ApprovalForce, oauth2.AccessTypeOnline)
+	// CSRF attack check state
+	b := make([]byte, 48)
+	_, err := io.ReadFull(rand.Reader, b)
+	if err != nil {
+		panic(err)
+	}
+	state := strings.TrimRight(base32.StdEncoding.EncodeToString(b), "=")
+	sess.Set(GoogleOauthState, state)
+	sess.Save()
+	log.Printf("before state:%s", state)
+
+	url := this.config.AuthCodeURL(state, oauth2.ApprovalForce, oauth2.AccessTypeOnline)
 	if url == "" {
 		// err
 	}
@@ -61,23 +80,28 @@ func (this *Google) Login() {
 }
 
 func (this *Google) Callback(redirect string) {
-	ctx := appengine.NewContext(this.r)
-	code := this.r.FormValue("code")
+	sess := NewSession(this.w, this.r, &sessionConfig)
 
-	// TODO state check
+	code := this.r.FormValue("code")
 	state := this.r.FormValue("state")
 	log.Printf("code:%s state:%s", code, state)
 
+	// CSRF attack check
+	if sess.Get(GoogleOauthState) != state {
+		log.Printf("invaild state sess:%s resp:%s", sess.Get(GoogleOauthState), state)
+		panic(errors.New("invaild state"))
+	}
+
+	ctx := appengine.NewContext(this.r)
 	tok, err := this.config.Exchange(ctx, code)
 	if err != nil {
 		panic(err)
 	}
 	if tok.Valid() == false {
-		panic(errors.New("vaild token"))
+		log.Printf("invaild token:%#v", tok)
+		panic(errors.New("invaild token"))
 	}
-
-	sess := NewSession(this.w, this.r)
-	sess.Set("Google_AccessToken", tok.AccessToken)
+	sess.Set(GoogleAccessTokenKey, tok.AccessToken)
 
 	this.client = this.config.Client(ctx, tok)
 	service, _ := GoogleOauth.New(this.client)

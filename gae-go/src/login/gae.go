@@ -41,7 +41,7 @@ func (this *GAE) Callback(redirect string) {
 	}
 	*/
 	// TODO set user to sesssion
-	sess := NewSession(this.w, this.r)
+	sess := NewSession(this.w, this.r, &sessionConfig)
 	log.Printf("sess %#v", sess.session)
 	sess.Set("id", u.ID)
 	sess.Set("email", u.Email)
